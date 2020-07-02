@@ -1,0 +1,32 @@
+package shop.http.routes.secured
+
+import cats.{ Defer, Monad }
+import org.http4s.dsl.Http4sDsl
+import org.http4s.server.{ AuthMiddleware, Router }
+import org.http4s.{ AuthedRoutes, HttpRoutes }
+import shop.algebras.Orders
+import shop.domain.order.OrderId
+import shop.http.auth.users.CommonUser
+import shop.http.json._
+
+final class OrderRoutes[F[_]: Defer: Monad](
+    orders: Orders[F]
+) extends Http4sDsl[F] {
+  private[routes] val prefixPath = "/orders"
+
+  private val httpRoutes: AuthedRoutes[CommonUser, F] = AuthedRoutes.of {
+    // Get all orders
+    case GET -> Root as user =>
+      Ok(orders.findBy(user.value.id))
+
+    // Get order by id
+    case GET -> Root / UUIDVar(uuid) as user =>
+      Ok(orders.get(user.value.id, OrderId(uuid)))
+  }
+
+  def routes(
+      authMiddleware: AuthMiddleware[F, CommonUser]
+  ): HttpRoutes[F] = Router(
+    prefixPath -> authMiddleware(httpRoutes)
+  )
+}
